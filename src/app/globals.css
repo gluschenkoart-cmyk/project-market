@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+/*
+ * Дизайн-токени проєкту (джерело істини: CLAUDE.md, розділ "Дизайн-напрям").
+ * Tailwind v4 читає @theme напряму з CSS і генерує утиліти самостійно:
+ * bg-ink, text-paper, border-accent, font-heading тощо.
+ */
+@theme {
+  --color-ink: #14110e; /* теплий майже чорний — текст, товсті контури */
+  --color-paper: #fffdf7; /* теплий білий — основа сторінки */
+  --color-accent: #ff3d6e; /* яскравий коралово-рожевий — основний акцент */
+  --color-accent-2: #ffc93c; /* жовтий — стікер-бейджі, вживати економно */
+
+  --font-heading: var(--font-unbounded), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+
+  /* Товщина контурів у стікер-стилі карток — свідомо жирніша за типовий border */
+  --border-width-thick: 3px;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+  }
+}

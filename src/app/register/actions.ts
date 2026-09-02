@@ -1,0 +1,72 @@
+"use server";
+
+import { hash } from "bcryptjs";
+import { redirect } from "next/navigation";
+import { Prisma } from "@prisma/client";
+import { AuthError } from "next-auth";
+import { prisma } from "@/lib/db";
+import { registerSchema } from "@/lib/validation/auth";
+import { signIn } from "@/auth";
+
+export interface RegisterFormState {
+  fieldErrors: Partial<Record<string, string>>;
+  formError?: string;
+}
+
+const SALT_ROUNDS = 12;
+
+export async function registerAction(
+  _prevState: RegisterFormState,
+  formData: FormData,
+): Promise<RegisterFormState> {
+  const parsed = registerSchema.safeParse(Object.fromEntries(formData));
+
+  if (!parsed.success) {
+    const fieldErrors: Partial<Record<string, string>> = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path[0];
+      if (typeof key === "string" && !fieldErrors[key]) {
+        fieldErrors[key] = issue.message;
+      }
+    }
+    return { fieldErrors };
+  }
+
+  const { email, password, fullName, phone, university, faculty, copyrightConfirmed } =
+    parsed.data;
+
+  try {
+    const passwordHash = await hash(password, SALT_ROUNDS);
+
+    await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        fullName,
+        phone,
+        university,
+        faculty: faculty || null,
+        copyrightConfirmed,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { fieldErrors: { email: "Цей email вже зареєстровано" } };
+    }
+    return { fieldErrors: {}, formError: "Щось пішло не так. Спробуйте ще раз." };
+  }
+
+  // Реєстрація одразу входить у профіль — не змушуємо вводити пароль двічі поспіль.
+  try {
+    await signIn("credentials", { email, password, redirectTo: "/profile" });
+  } catch (error) {
+    // signIn на успіху сам кидає внутрішній NEXT_REDIRECT — це не помилка,
+    // а спосіб Next.js виконати редірект, тож прокидаємо його далі.
+    if (error instanceof AuthError) {
+      // Акаунт створено, але автоматичний вхід не вдався — не критично,
+      // користувач просто увійде вручну.
+      redirect("/login");
+    }
+    throw error;
+  }
+}

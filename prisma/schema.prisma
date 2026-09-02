@@ -1,0 +1,217 @@
+// Ядро даних платформи (Етап 2).
+// Спроєктовано так, щоб додавання нової вертикалі (Образотворче мистецтво,
+// Скульптура, Дизайн, Цифрове мистецтво/3D/Анімація) не вимагало
+// переписування цієї схеми — тільки нове значення в enum Vertical і нову
+// Zod-схему для поля `dna` (див. src/lib/validation/).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Дві категорії користувачів платформи (ProjectMarketConceptSummary,
+/// розділ 8 "Аудиторії": Creators / Buyers). Обирається одразу після першого
+/// входу, на онбордингу — не в момент реєстрації через Google/Apple, бо
+/// звідти ми ще не знаємо, хто перед нами.
+enum UserRole {
+  /// Показує, архівує й продає власні проєкти.
+  CREATOR
+  /// Шукає й купує/ліцензує готові проєкти (архбюро, девелопери, галереї —
+  /// розділ 8 документа концепції).
+  RECEIVER
+}
+
+/// Автор — реєструється з самодекларацією авторства (CLAUDE.md, "Авторське
+/// право"). Платформа не верифікує права, лише фіксує ці дані на випадок
+/// спору. Модель обслуговує обидві ролі (CREATOR і RECEIVER) — це свідомо
+/// один User, а не дві окремі таблиці, бо решта системи (сесії, майбутні
+/// повідомлення автор-покупець) однакова для обох.
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+
+  /// Із профілю Google/Apple при OAuth-вході. `fullName` нижче — окреме,
+  /// свідомо підтверджене користувачем поле для юридичної самодекларації;
+  /// `name` може відрізнятись (напр. нікнейм у Google-акаунті).
+  name  String?
+  image String?
+
+  /// Пусте для входу через Google/Apple — не всі користувачі матимуть пароль.
+  passwordHash String?
+
+  /// Ці чотири поля — самодекларація автора з CLAUDE.md. При реєстрації
+  /// email+паролем збираються одразу; при вході через Google/Apple —
+  /// на онбордингу одразу після першого входу (там звідки їх узяти більше
+  /// нема). Тому не NOT NULL на рівні бази — обов'язковість перевіряє
+  /// застосунок (див. src/lib/onboarding.ts), доки анкета не заповнена.
+  fullName String?
+  /// Обов'язковий номер телефону — вимога продукту навіть для Google/Apple
+  /// входу, тому це окреме поле, а не те, що Google іноді віддає.
+  phone String?
+
+  /// Навмисно вільний текст, а не список університетів — має приймати й
+  /// школи гейм-дизайну, приватні студії, курси (виявлено в персоні
+  /// Тимура, PersonyTaShlyahKorystuvacha.md).
+  university String?
+  faculty    String?
+
+  /// Чекбокс при реєстрації: "я самостійно несу відповідальність за
+  /// авторське право на завантажений матеріал".
+  copyrightConfirmed Boolean @default(false)
+
+  /// Обирається на онбордингу. null = ще не обрано (профіль неповний).
+  role UserRole?
+
+  /// Тільки для role = CREATOR: один з п'яти напрямів, який людина вказує
+  /// про себе при реєстрації (не плутати з Project.vertical — той належить
+  /// конкретному проєкту, цей описує самого автора). RECEIVER його не має.
+  primaryVertical Vertical?
+
+  accounts Account[]
+  sessions Session[]
+  projects Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Три службові моделі нижче — стандартна схема Auth.js для OAuth-входу
+/// (Google, Apple): прив'язка зовнішніх акаунтів і сесій до нашого User.
+/// Прикладного сенсу для продукту не несуть, руками не редагуються.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/// П'ять творчих вертикалей з концепції. Активно використовується поки що
+/// лише ARCHITECTURE — інші існують у схемі заздалегідь, щоб масштабування
+/// було конфігурацією, а не переписуванням ядра. Використовується у двох
+/// місцях: User.primaryVertical (напрям автора) і Project.vertical
+/// (вертикаль конкретного проєкту) — зазвичай збігаються, але формально
+/// не пов'язані.
+enum Vertical {
+  ARCHITECTURE
+  FINE_ART
+  SCULPTURE
+  DESIGN
+  DIGITAL_3D_ANIMATION
+}
+
+/// Шлях проєкту на платформі (ProjectMarketConceptSummary, розділ 3).
+/// Це ЖИТТЄВИЙ ЦИКЛ проєкту на маркетплейсі — не плутати з `academicType`
+/// у Project DNA, який описує ПОХОДЖЕННЯ роботи (курсова/дипломна/конкурсна).
+enum ProjectStatus {
+  ACADEMIC
+  CONCEPT
+  FOR_SALE
+  SOLD
+  IN_DEVELOPMENT
+  BUILT
+  ARCHIVED
+}
+
+model Project {
+  id       String @id @default(cuid())
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  vertical    Vertical      @default(ARCHITECTURE)
+  title       String
+  description String?
+  status      ProjectStatus @default(ACADEMIC)
+
+  /// null = "лише портфоліо, не продається". Не окремий boolean-перемикач —
+  /// сама відсутність ціни й є цим перемикачем (CLAUDE.md, "Ціноутворення").
+  priceUah Decimal? @db.Decimal(12, 2)
+
+  /// Окрема сума за право доопрацювати/розвинути ескіз далі — не те саме,
+  /// що priceUah (базова ціна проєкту як є). Незалежні один від одного:
+  /// автор може вказати одне, обидва або жодного (CLAUDE.md, "купити,
+  /// ліцензувати, розвинути"). Рішення від 01.09.2026.
+  developmentRightsPriceUah Decimal? @db.Decimal(12, 2)
+
+  /// Розширює пошук — і внутрішній (фільтри), і зовнішній (індексація
+  /// Google через meta-теги на сторінці проєкту). Рішення від 01.09.2026.
+  hashtags String[] @default([])
+
+  /// Project DNA: поля, специфічні для вертикалі (тип, площа, поверховість,
+  /// софт тощо). Форма й тип цього JSON визначаються Zod-схемою за
+  /// значенням `vertical` — див. src/lib/validation/architecture-dna.ts.
+  /// JSON тут свідомо: додати вертикаль №6 — це нова Zod-схема й нова форма,
+  /// без міграції цієї таблиці.
+  dna Json
+
+  files ProjectFile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vertical, status])
+}
+
+enum ProjectFileType {
+  RENDER
+  PLAN
+  SECTION
+  MODEL_3D
+  DOCUMENT
+}
+
+model ProjectFile {
+  id        String          @id @default(cuid())
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      ProjectFileType
+  /// Публічний шлях до файлу. Зараз завжди з локального диска сервера
+  /// (src/lib/storage.ts) — на S3-сумісне сховище перейдемо, коли оберемо
+  /// провайдера, без зміни цього поля. Обмеження — 21 МБ на файл
+  /// (src/lib/validation/project.ts, MAX_FILE_SIZE_BYTES).
+  url String
+  /// Зменшена версія для попереднього перегляду в стрічці/картці. Поки що
+  /// дорівнює `url` (немає окремого пайплайну обробки зображень) — окреме
+  /// поле вже існує, щоб додати реальні мініатюри пізніше без міграції.
+  previewUrl String?
+  /// Оригінальна назва файлу — показуємо її людині замість технічного id.
+  originalName String?
+  order        Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
