@@ -56,6 +56,9 @@ export interface FeedProject {
   areaSqm: number;
   floors: number;
   previewUrl: string | null;
+  /** Чи додав ЦЕЙ глядач проєкт собі в обране (Етап 6) — false і для
+   * незалогінених, і коли viewerId у getProjectFeedPage не передано. */
+  isFavorited: boolean;
 }
 
 export interface ProjectFeedPage {
@@ -76,6 +79,7 @@ interface FeedRow {
   areaSqm: number | null;
   floors: number | null;
   previewUrl: string | null;
+  isFavorited: boolean;
 }
 
 /** Екранує спецсимволи LIKE/ILIKE (% і _, і сам символ екранування), щоб
@@ -187,23 +191,33 @@ function mapRowToFeedProject(row: FeedRow): FeedProject {
     areaSqm: row.areaSqm ?? 0,
     floors: row.floors ?? 0,
     previewUrl: row.previewUrl,
+    isFavorited: row.isFavorited,
   };
 }
 
 export interface GetProjectFeedPageOptions {
   page: number;
   take?: number;
+  /** Хто дивиться стрічку зараз — лише щоб позначити вже збережені "в
+   * обране" проєкти (Етап 6). Не задано для незалогінених відвідувачів. */
+  viewerId?: string;
 }
 
 export async function getProjectFeedPage(
   filters: ProjectFilters,
-  { page, take = PROJECT_FEED_PAGE_SIZE }: GetProjectFeedPageOptions,
+  { page, take = PROJECT_FEED_PAGE_SIZE, viewerId }: GetProjectFeedPageOptions,
 ): Promise<ProjectFeedPage> {
   const safePage = Number.isFinite(page) && page > 1 ? Math.trunc(page) : 1;
   const offset = (safePage - 1) * take;
 
   const whereSql = Prisma.join(buildWhereConditions(filters), " AND ");
   const orderSql = ORDER_BY_SQL[filters.sort];
+  const isFavoritedSql = viewerId
+    ? Prisma.sql`EXISTS (
+        SELECT 1 FROM "FavoriteProject" AS fp
+        WHERE fp."projectId" = p."id" AND fp."userId" = ${viewerId}
+      )`
+    : Prisma.sql`FALSE`;
 
   const rows = await prisma.$queryRaw<FeedRow[]>(Prisma.sql`
     SELECT
@@ -221,7 +235,8 @@ export async function getProjectFeedPage(
         WHERE pf."projectId" = p."id"
         ORDER BY (pf."type" = 'RENDER') DESC, pf."order" ASC, pf."createdAt" ASC
         LIMIT 1
-      ) AS "previewUrl"
+      ) AS "previewUrl",
+      ${isFavoritedSql} AS "isFavorited"
     FROM "Project" AS p
     INNER JOIN "User" AS u ON u."id" = p."authorId"
     WHERE ${whereSql}

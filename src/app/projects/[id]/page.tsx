@@ -1,14 +1,27 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { PriceBadge, StatusBadge } from "@/components/ui/Badge";
-import { PROJECT_STATUS_TO_BADGE } from "@/lib/project-status";
+import { Button } from "@/components/ui/Button";
+import { FavoriteButton } from "@/components/ui/FavoriteButton";
+import { SelectField } from "@/components/ui/SelectField";
+import { formatTelegramContact, formatWhatsappContact } from "@/lib/contacts";
+import {
+  PROJECT_STATUS_LABELS,
+  PROJECT_STATUS_TO_BADGE,
+  PROJECT_STATUS_VALUES,
+} from "@/lib/project-status";
+import { CONTACT_UNLOCK_PRICE_UAH, getContactUnlockState } from "@/lib/payments/contact-unlock";
+import { isProjectFavorited } from "@/lib/projects/favorites";
 import {
   ACADEMIC_TYPE_LABELS,
   STYLE_LABELS,
   TYPOLOGY_LABELS,
   type ArchitectureDna,
 } from "@/lib/validation/architecture-dna";
+import { unlockContactsAction, updateProjectStatusAction } from "./actions";
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>;
@@ -20,7 +33,16 @@ function getProject(id: string) {
   return prisma.project.findUnique({
     where: { id },
     include: {
-      author: { select: { fullName: true, university: true } },
+      author: {
+        select: {
+          fullName: true,
+          university: true,
+          phone: true,
+          email: true,
+          telegram: true,
+          whatsapp: true,
+        },
+      },
       files: { orderBy: { order: "asc" } },
     },
   });
@@ -51,26 +73,45 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
 
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { id } = await params;
-  const project = await getProject(id);
+  const [project, session] = await Promise.all([getProject(id), auth()]);
   if (!project) {
     notFound();
   }
 
   const dna = project.dna as unknown as ArchitectureDna;
+  const viewerId = session?.user?.id;
+  const isAuthenticated = Boolean(viewerId);
+  const isOwnProject = viewerId === project.authorId;
+
+  const [unlockState, isFavorited] = await Promise.all([
+    getContactUnlockState(viewerId, project),
+    viewerId ? isProjectFavorited(viewerId, project.id) : Promise.resolve(false),
+  ]);
+
+  const telegramContact = formatTelegramContact(project.author.telegram);
+  const whatsappContact = formatWhatsappContact(project.author.whatsapp);
+  const hasExtraContacts = Boolean(telegramContact || whatsappContact);
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-10 px-6 py-16">
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={PROJECT_STATUS_TO_BADGE[project.status]} />
-          {project.hashtags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border-[3px] border-ink bg-paper px-3 py-1 text-xs font-semibold text-ink/70"
-            >
-              #{tag}
-            </span>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={PROJECT_STATUS_TO_BADGE[project.status]} />
+            {project.hashtags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border-[3px] border-ink bg-paper px-3 py-1 text-xs font-semibold text-ink/70"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+          <FavoriteButton
+            projectId={project.id}
+            initialFavorited={isFavorited}
+            isAuthenticated={isAuthenticated}
+          />
         </div>
         <h1 className="font-heading text-3xl font-extrabold text-ink sm:text-4xl">
           {project.title}
@@ -149,10 +190,56 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         ) : null}
       </div>
 
-      <div className="rounded-2xl border-[3px] border-ink bg-ink/5 p-6 text-sm text-ink/60">
-        Зв&apos;язок з автором і контакти з&apos;являться на наступному етапі
-        («Угода») — там-таки буде і оплата за перегляд контактів.
-      </div>
+      {isOwnProject ? (
+        <form
+          action={updateProjectStatusAction.bind(null, project.id)}
+          className="flex flex-wrap items-end gap-3 rounded-2xl border-[3px] border-ink bg-paper p-6 shadow-[4px_4px_0_0_var(--color-ink)]"
+        >
+          <div className="min-w-[220px] flex-1">
+            <SelectField
+              label="Статус проєкту"
+              name="status"
+              defaultValue={project.status}
+              options={PROJECT_STATUS_VALUES.map((value) => ({
+                value,
+                label: PROJECT_STATUS_LABELS[value],
+              }))}
+            />
+          </div>
+          <Button type="submit" variant="secondary">
+            Зберегти статус
+          </Button>
+        </form>
+      ) : null}
+
+      {isOwnProject || unlockState === "UNLOCKED" ? (
+        <ContactsCard
+          author={project.author}
+          telegramContact={telegramContact}
+          whatsappContact={whatsappContact}
+          isOwnProject={isOwnProject}
+        />
+      ) : isAuthenticated ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border-[3px] border-ink bg-accent-2/30 p-6 text-center shadow-[4px_4px_0_0_var(--color-ink)]">
+          <p className="font-heading text-lg font-bold text-ink">Контакти автора приховані</p>
+          <p className="max-w-sm text-sm text-ink/70">
+            Перегляньте телефон і email{hasExtraContacts ? ", а також Telegram/WhatsApp" : ""} автора
+            за одноразову оплату.
+          </p>
+          <form action={unlockContactsAction.bind(null, project.id)}>
+            <Button type="submit">Переглянути контакти — {CONTACT_UNLOCK_PRICE_UAH} ₴</Button>
+          </form>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border-[3px] border-dashed border-ink/30 p-6 text-center">
+          <p className="font-heading text-lg font-bold text-ink">
+            Увійдіть, щоб переглянути контакти
+          </p>
+          <Link href={`/login?from=/projects/${project.id}`}>
+            <Button type="button">Увійти</Button>
+          </Link>
+        </div>
+      )}
     </main>
   );
 }
@@ -162,6 +249,77 @@ function DnaRow({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-4">
       <dt className="font-semibold text-ink/60">{label}</dt>
       <dd className="text-ink">{value}</dd>
+    </div>
+  );
+}
+
+interface ContactsCardProps {
+  author: { phone: string | null; email: string };
+  telegramContact: ReturnType<typeof formatTelegramContact>;
+  whatsappContact: ReturnType<typeof formatWhatsappContact>;
+  isOwnProject: boolean;
+}
+
+/**
+ * Показує контакти автора — і власнику проєкту (завжди), і тому, хто вже
+ * оплатив перегляд (Етап 6, CONTACT_UNLOCK_PRICE_UAH). Telegram/WhatsApp —
+ * необов'язкові поля профілю (src/lib/contacts.ts), тому показуємо лише
+ * задані.
+ */
+function ContactsCard({ author, telegramContact, whatsappContact, isOwnProject }: ContactsCardProps) {
+  return (
+    <dl className="flex flex-col gap-3 rounded-2xl border-[3px] border-ink bg-paper p-6 shadow-[4px_4px_0_0_var(--color-ink)]">
+      <p className="font-heading text-sm font-bold uppercase tracking-wide text-ink/50">
+        {isOwnProject ? "Ваші контакти" : "Контакти автора"}
+      </p>
+      {author.phone ? (
+        <ContactRow label="Телефон" href={`tel:${author.phone}`} value={author.phone} />
+      ) : null}
+      <ContactRow label="Email" href={`mailto:${author.email}`} value={author.email} />
+      {telegramContact ? (
+        <ContactRow
+          label="Telegram"
+          href={telegramContact.href}
+          value={telegramContact.label.replace(/^Telegram: /, "")}
+          external
+        />
+      ) : null}
+      {whatsappContact ? (
+        <ContactRow
+          label="WhatsApp"
+          href={whatsappContact.href}
+          value={whatsappContact.label.replace(/^WhatsApp: /, "")}
+          external
+        />
+      ) : null}
+    </dl>
+  );
+}
+
+function ContactRow({
+  label,
+  href,
+  value,
+  external,
+}: {
+  label: string;
+  href: string;
+  value: string;
+  external?: boolean;
+}) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="font-semibold text-ink/60">{label}</dt>
+      <dd className="text-ink">
+        <a
+          href={href}
+          target={external ? "_blank" : undefined}
+          rel={external ? "noopener noreferrer" : undefined}
+          className="underline decoration-2 underline-offset-4 hover:text-accent"
+        >
+          {value}
+        </a>
+      </dd>
     </div>
   );
 }

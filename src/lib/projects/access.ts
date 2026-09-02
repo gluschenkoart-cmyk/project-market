@@ -3,6 +3,9 @@ import { prisma } from "@/lib/db";
 
 export interface ViewerAccess {
   isAuthenticated: boolean;
+  /** Задано лише коли isAuthenticated — для стрічки (Етап 6, позначка "в
+   * обраному" на картках) і подібних місць, яким потрібен саме id. */
+  userId?: string;
   /** Чи бачить ця людина панель детальних фільтрів (рішення від
    * 01.09.2026, CLAUDE.md: "Пошук — тільки для Отримувача"). */
   isReceiver: boolean;
@@ -30,5 +33,5 @@ export async function resolveViewerAccess(): Promise<ViewerAccess> {
     select: { role: true },
   });
 
-  return { isAuthenticated: true, isReceiver: user?.role === "RECEIVER" };
+  return { isAuthenticated: true, userId: session.user.id, isReceiver: user?.role === "RECEIVER" };
 }

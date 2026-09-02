@@ -27,11 +27,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const resolvedSearchParams = await searchParams;
   const urlSearchParams = toURLSearchParams(resolvedSearchParams);
 
-  const { isAuthenticated, isReceiver } = await resolveViewerAccess();
+  const { isAuthenticated, isReceiver, userId } = await resolveViewerAccess();
   const filters = parseProjectFilters(urlSearchParams, { basicOnly: !isReceiver });
   const { items, hasMore } = await getProjectFeedPage(filters, {
     page: 1,
     take: PROJECT_FEED_PAGE_SIZE,
+    viewerId: userId,
   });
 
   // Канонічний рядок фільтрів (без "page") — і ключ для ProjectFeed (нова
@@ -62,6 +63,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         filtersQuery={filtersQuery}
         initialItems={items}
         initialHasMore={hasMore}
+        isAuthenticated={isAuthenticated}
       />
     </main>
   );

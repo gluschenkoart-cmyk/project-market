@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { PriceBadge, StatusBadge, type ProjectStatus } from "@/components/ui/Badge";
+import { FavoriteButton } from "@/components/ui/FavoriteButton";
 
 /**
  * Картка проєкту для вертикалі "Архітектура" — демонструє ключові поля
@@ -24,6 +25,9 @@ export interface ProjectCardProps {
   /** Перше зображення проєкту (перевага — рендерам, див.
    * src/lib/projects/feed.ts). null/undefined — показуємо заглушку. */
   previewUrl?: string | null;
+  /** Задано — над фото з'являється серце "в обране" (Етап 6). Без `id`
+   * кнопка теж не показується (немає що зберігати в /style-guide). */
+  favorite?: { isFavorited: boolean; isAuthenticated: boolean };
   className?: string;
 }
 
@@ -38,6 +42,7 @@ export function ProjectCard({
   status,
   priceUah,
   previewUrl,
+  favorite,
   className,
 }: ProjectCardProps) {
   const card = (
@@ -48,7 +53,15 @@ export function ProjectCard({
         className,
       )}
     >
-      <div className="aspect-[4/3] overflow-hidden border-b-[3px] border-ink bg-ink/5">
+      <div className="relative aspect-[4/3] overflow-hidden border-b-[3px] border-ink bg-ink/5">
+        {id && favorite ? (
+          <FavoriteButton
+            projectId={id}
+            initialFavorited={favorite.isFavorited}
+            isAuthenticated={favorite.isAuthenticated}
+            className="absolute right-3 top-3 z-10 shadow-[3px_3px_0_0_var(--color-ink)]"
+          />
+        ) : null}
         {previewUrl ? (
           // Файли зараз віддаються з локального сховища (src/lib/storage.ts),
           // домен наперед невідомий next/image — звичайний <img> навмисно

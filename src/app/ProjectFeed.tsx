@@ -14,6 +14,9 @@ interface ProjectFeedProps {
   filtersQuery: string;
   initialItems: FeedProject[];
   initialHasMore: boolean;
+  /** Для серця "в обране" на кожній картці (Етап 6) — незалогінений
+   * веде на /login замість перемикання. */
+  isAuthenticated: boolean;
 }
 
 interface FeedApiResponse {
@@ -28,7 +31,12 @@ interface FeedApiResponse {
  * /api/projects при наближенні до кінця списку (IntersectionObserver на
  * невидимому "сторожі" в самому низу).
  */
-export function ProjectFeed({ filtersQuery, initialItems, initialHasMore }: ProjectFeedProps) {
+export function ProjectFeed({
+  filtersQuery,
+  initialItems,
+  initialHasMore,
+  isAuthenticated,
+}: ProjectFeedProps) {
   const [items, setItems] = useState<FeedProject[]>(initialItems);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -128,6 +136,7 @@ export function ProjectFeed({ filtersQuery, initialItems, initialHasMore }: Proj
             status={PROJECT_STATUS_TO_BADGE[project.status]}
             priceUah={project.priceUah ?? undefined}
             previewUrl={project.previewUrl}
+            favorite={{ isFavorited: project.isFavorited, isAuthenticated }}
           />
         ))}
       </div>

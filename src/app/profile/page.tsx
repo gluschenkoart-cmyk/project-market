@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { isProfileComplete } from "@/lib/onboarding";
 import { PROJECT_STATUS_TO_BADGE } from "@/lib/project-status";
 import { VERTICAL_LABELS } from "@/lib/validation/onboarding";
+import { formatTelegramContact, formatWhatsappContact } from "@/lib/contacts";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
 import { signOutAction } from "./actions";
@@ -39,7 +40,9 @@ export default async function ProfilePage() {
       role: true,
       primaryVertical: true,
       copyrightConfirmed: true,
-      _count: { select: { projects: true } },
+      telegram: true,
+      whatsapp: true,
+      _count: { select: { projects: true, favorites: true } },
       projects: {
         select: { id: true, title: true, status: true },
         orderBy: { createdAt: "desc" },
@@ -57,6 +60,9 @@ export default async function ProfilePage() {
     redirect("/onboarding");
   }
 
+  const telegramContact = formatTelegramContact(user.telegram);
+  const whatsappContact = formatWhatsappContact(user.whatsapp);
+
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-8 px-6 py-16">
       <div className="flex items-start justify-between gap-4">
@@ -64,11 +70,18 @@ export default async function ProfilePage() {
           <h1 className="font-heading text-3xl font-extrabold text-ink">{user.fullName}</h1>
           <p className="text-ink/60">{user.university}</p>
         </div>
-        <form action={signOutAction}>
-          <Button type="submit" variant="ghost">
-            Вийти
-          </Button>
-        </form>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <Link href="/profile/edit">
+            <Button type="button" variant="secondary" size="sm">
+              Редагувати профіль
+            </Button>
+          </Link>
+          <form action={signOutAction}>
+            <Button type="submit" variant="ghost" size="sm">
+              Вийти
+            </Button>
+          </form>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -101,6 +114,36 @@ export default async function ProfilePage() {
             <dd className="text-ink">{user.faculty}</dd>
           </div>
         ) : null}
+        {telegramContact ? (
+          <div className="flex justify-between gap-4">
+            <dt className="font-semibold text-ink/60">Telegram</dt>
+            <dd className="text-ink">
+              <a
+                href={telegramContact.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-2 underline-offset-4 hover:text-accent"
+              >
+                {telegramContact.label.replace(/^Telegram: /, "")}
+              </a>
+            </dd>
+          </div>
+        ) : null}
+        {whatsappContact ? (
+          <div className="flex justify-between gap-4">
+            <dt className="font-semibold text-ink/60">WhatsApp</dt>
+            <dd className="text-ink">
+              <a
+                href={whatsappContact.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-2 underline-offset-4 hover:text-accent"
+              >
+                {whatsappContact.label.replace(/^WhatsApp: /, "")}
+              </a>
+            </dd>
+          </div>
+        ) : null}
         {user.role === "CREATOR" ? (
           <div className="flex justify-between gap-4">
             <dt className="font-semibold text-ink/60">Проєктів завантажено</dt>
@@ -108,6 +151,16 @@ export default async function ProfilePage() {
           </div>
         ) : null}
       </dl>
+
+      <Link
+        href="/favorites"
+        className="flex items-center justify-between gap-4 rounded-2xl border-[3px] border-ink bg-paper px-6 py-4 shadow-[4px_4px_0_0_var(--color-ink)] hover:bg-ink/5"
+      >
+        <span className="font-heading text-lg font-bold text-ink">Обрані проєкти</span>
+        <span className="inline-flex items-center rounded-full border-[3px] border-ink bg-accent-2 px-3 py-1 font-heading text-xs font-bold text-ink">
+          {user._count.favorites}
+        </span>
+      </Link>
 
       {user.role === "CREATOR" ? (
         <div className="flex flex-col gap-4">

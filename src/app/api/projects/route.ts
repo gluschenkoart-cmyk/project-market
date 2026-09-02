@@ -22,13 +22,13 @@ export async function GET(request: NextRequest) {
   // не показав панель фільтрів — інакше Творець міг би обійти обмеження
   // "пошук — тільки для Отримувача" (CLAUDE.md) прямим запитом до цієї
   // ручки, без потреби навіть заводити другий акаунт.
-  const { isReceiver } = await resolveViewerAccess();
+  const { isReceiver, userId } = await resolveViewerAccess();
   const filters = parseProjectFilters(searchParams, { basicOnly: !isReceiver });
 
   const pageParam = Number(searchParams.get("page"));
   const page = Number.isFinite(pageParam) && pageParam > 1 ? Math.trunc(pageParam) : 1;
 
-  const result = await getProjectFeedPage(filters, { page });
+  const result = await getProjectFeedPage(filters, { page, viewerId: userId });
 
   return NextResponse.json(result);
 }

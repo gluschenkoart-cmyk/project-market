@@ -15,6 +15,9 @@ export async function SiteHeader() {
       <nav className="flex items-center gap-4">
         {session?.user ? (
           <>
+            <Link href="/favorites" className="font-semibold text-ink hover:text-accent">
+              Обране
+            </Link>
             <Link href="/profile" className="font-semibold text-ink hover:text-accent">
               Профіль
             </Link>

@@ -60,6 +60,15 @@ model User {
   university String?
   faculty    String?
 
+  /// Необов'язкові додаткові канали зв'язку (Етап 6, "Угода") — окрім
+  /// обов'язкового `phone` вище. Обидва вільним текстом, не окремими
+  /// "нікнейм"/"телефон"-полями: людина сама пише те, за чим її знайдуть —
+  /// @юзернейм або номер для Telegram, номер для WhatsApp — а
+  /// src/lib/contacts.ts сам розпізнає формат і будує клікабельне
+  /// посилання (t.me/… чи wa.me/…) або показує як є.
+  telegram String?
+  whatsapp String?
+
   /// Чекбокс при реєстрації: "я самостійно несу відповідальність за
   /// авторське право на завантажений матеріал".
   copyrightConfirmed Boolean @default(false)
@@ -72,9 +81,16 @@ model User {
   /// конкретному проєкту, цей описує самого автора). RECEIVER його не має.
   primaryVertical Vertical?
 
-  accounts Account[]
-  sessions Session[]
-  projects Project[]
+  accounts        Account[]
+  sessions        Session[]
+  projects        Project[]
+  /// Проєкти (чужі чи власні), додані собі "в обране" (Етап 6, рішення
+  /// Артема: доступно і Творцю, і Отримувачу — не лише для купівлі, а й
+  /// щоб зберегти щось для натхнення).
+  favorites       FavoriteProject[]
+  /// Оплачені розблокування контактів ІНШИХ людей — ця людина виступає
+  /// "глядачем" (viewer), не автором проєкту (Етап 6, "Угода").
+  contactUnlocks  ContactUnlock[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -177,12 +193,80 @@ model Project {
   /// без міграції цієї таблиці.
   dna Json
 
-  files ProjectFile[]
+  files          ProjectFile[]
+  favoritedBy    FavoriteProject[]
+  contactUnlocks ContactUnlock[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([vertical, status])
+}
+
+/// "Обране" (Етап 6) — і Творець, і Отримувач можуть зберегти собі
+/// будь-який проєкт (не обов'язково для купівлі — може бути й для
+/// натхнення чи прикладу). Просте з'єднання без додаткових полів: сам
+/// факт "збережено" — це вся інформація, яка тут потрібна.
+model FavoriteProject {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+}
+
+/// Хто оплатив (Етап 6) — LiqPay зараз єдиний підключений провайдер;
+/// DEV_MOCK — режим розробки, доки в .env немає справжніх ключів LiqPay
+/// (src/lib/payments/), щоб усю механіку можна було перевірити вже зараз.
+enum PaymentProvider {
+  LIQPAY
+  DEV_MOCK
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+/// Оплата $1 (в гривнях) за перегляд контактів автора проєкту (CLAUDE.md,
+/// рішення від 01.09.2026, і уточнення від 02.09.2026: діє для всіх
+/// проєктів і всіх користувачів). Один рядок на пару "хто дивиться +
+/// проєкт" — після SUCCESS контакти лишаються відкритими для цієї людини
+/// назавжди (повторна оплата не потрібна за той самий проєкт).
+model ContactUnlock {
+  id        String  @id @default(cuid())
+  viewerId  String
+  viewer    User    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  amountUah Decimal         @db.Decimal(10, 2)
+  provider  PaymentProvider
+  status    PaymentStatus   @default(PENDING)
+
+  /// Унікальний ідентифікатор спроби оплати, яким LiqPay зв'язує форму
+  /// оплати з callback-повідомленням (src/lib/payments/liqpay.ts). При
+  /// повторній спробі оплати того самого проєкту — нове значення, той
+  /// самий рядок (UPDATE, не INSERT — обмеження нижче не дозволило б інше).
+  providerOrderId String @unique
+
+  /// Підписані параметри для форми оплати LiqPay (base64 JSON + підпис) —
+  /// збережені одразу при створенні спроби, щоб сторінка автоматичної
+  /// відправки форми (src/app/pay/liqpay/[unlockId]) не перераховувала їх
+  /// повторно. Порожні для DEV_MOCK.
+  checkoutData      String? @db.Text
+  checkoutSignature String?
+
+  createdAt DateTime  @default(now())
+  paidAt    DateTime?
+
+  @@unique([viewerId, projectId])
+  @@index([projectId])
 }
 
 enum ProjectFileType {
