@@ -7,6 +7,7 @@ import { compare } from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { loginSchema } from "@/lib/validation/auth";
 import { authConfig } from "@/auth.config";
+import { isAdminEmail } from "@/lib/admin";
 
 /**
  * Повна автентифікація (Node.js-рантайм): email+пароль і вхід через
@@ -39,6 +40,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
+
+        // Адміністраторські email (ADMIN_EMAILS, src/lib/admin.ts) навмисно
+        // НЕ можуть входити паролем — лише через Google/Apple, де сам
+        // провайдер підтверджує володіння цією поштою. Реєстрація й вхід
+        // паролем нічого не перевіряють, крім унікальності рядка в базі
+        // (registerAction) — без цієї заборони будь-хто міг би
+        // зареєструватись на чужу адміністраторську адресу email+паролем,
+        // не маючи до неї доступу, і отримати повний доступ до /admin.
+        if (isAdminEmail(parsed.data.email)) return null;
 
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },

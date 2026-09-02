@@ -7,6 +7,7 @@ import { AuthError } from "next-auth";
 import { prisma } from "@/lib/db";
 import { registerSchema } from "@/lib/validation/auth";
 import { signIn } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 
 export interface RegisterFormState {
   fieldErrors: Partial<Record<string, string>>;
@@ -34,6 +35,20 @@ export async function registerAction(
 
   const { email, password, fullName, phone, university, faculty, copyrightConfirmed } =
     parsed.data;
+
+  // Безпека (знайдено при перевірці Етапу 8): email+пароль тут нічого не
+  // підтверджує, окрім унікальності рядка в базі — без цієї заборони
+  // будь-хто міг би зареєструватись на адміністраторську адресу
+  // (ADMIN_EMAILS) раніше за самого адміністратора й отримати повний
+  // доступ до /admin. Для цих адрес вхід можливий лише через Google/Apple
+  // (src/auth.ts), де провайдер сам підтверджує володіння поштою.
+  if (isAdminEmail(email)) {
+    return {
+      fieldErrors: {
+        email: "Ця адреса адміністраторська — увійдіть через Google, а не паролем",
+      },
+    };
+  }
 
   try {
     const passwordHash = await hash(password, SALT_ROUNDS);
