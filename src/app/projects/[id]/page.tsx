@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { FavoriteButton } from "@/components/ui/FavoriteButton";
 import { SelectField } from "@/components/ui/SelectField";
 import { formatTelegramContact, formatWhatsappContact } from "@/lib/contacts";
+import { isAdminEmail } from "@/lib/admin";
 import {
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_TO_BADGE,
@@ -82,6 +83,14 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const viewerId = session?.user?.id;
   const isAuthenticated = Boolean(viewerId);
   const isOwnProject = viewerId === project.authorId;
+  const isAdmin = isAdminEmail(session?.user?.email);
+
+  // Приховано модератором (Етап 7) — доступно тільки автору й
+  // адміністраторам; для всіх інших сторінка виглядає так, наче проєкту
+  // не існує (та сама логіка, що й у публічній стрічці, feed.ts).
+  if (project.isHidden && !isOwnProject && !isAdmin) {
+    notFound();
+  }
 
   const [unlockState, isFavorited] = await Promise.all([
     getContactUnlockState(viewerId, project),
@@ -94,6 +103,18 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-10 px-6 py-16">
+      {project.isHidden ? (
+        <div className="rounded-2xl border-[3px] border-ink bg-accent-2/40 p-4 text-sm text-ink">
+          <p className="font-heading font-bold">Цю роботу приховано модератором</p>
+          {project.hiddenReason ? <p className="mt-1 text-ink/70">Причина: {project.hiddenReason}</p> : null}
+          <p className="mt-1 text-ink/70">
+            {isAdmin
+              ? "Бачите цю сторінку як адміністратор — для решти відвідувачів вона недоступна."
+              : "Бачите цю сторінку тільки ви як автор — для решти відвідувачів вона недоступна."}
+          </p>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">

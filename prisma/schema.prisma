@@ -197,6 +197,17 @@ model Project {
   favoritedBy    FavoriteProject[]
   contactUnlocks ContactUnlock[]
 
+  /// Базова модерація (Етап 7) — адміністратор може приховати проєкт, що
+  /// порушує правила (плагіат, образливий вміст тощо), не видаляючи його.
+  /// Прихований проєкт зникає зі стрічки, пошуку й "обраного" для всіх,
+  /// крім автора і адміністраторів (src/lib/projects/feed.ts,
+  /// src/lib/projects/favorites.ts, src/app/projects/[id]/page.tsx).
+  isHidden     Boolean   @default(false)
+  /// Нотатка адміністратора — навіщо приховано; необов'язкова, показується
+  /// і автору, і іншим адміністраторам.
+  hiddenReason String?
+  hiddenAt     DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

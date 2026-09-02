@@ -10,7 +10,9 @@ import type { FeedProject } from "@/lib/projects/feed";
  */
 export async function getFavoriteProjects(userId: string): Promise<FeedProject[]> {
   const favorites = await prisma.favoriteProject.findMany({
-    where: { userId },
+    // Приховані модератором проєкти (Етап 7) не показуємо і тут — та сама
+    // логіка, що й у публічній стрічці (src/lib/projects/feed.ts).
+    where: { userId, project: { isHidden: false } },
     orderBy: { createdAt: "desc" },
     include: {
       project: {

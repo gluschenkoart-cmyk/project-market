@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { Button } from "@/components/ui/Button";
 import { signOutAction } from "@/app/profile/actions";
 
@@ -21,6 +22,11 @@ export async function SiteHeader() {
             <Link href="/profile" className="font-semibold text-ink hover:text-accent">
               Профіль
             </Link>
+            {isAdminEmail(session.user.email) ? (
+              <Link href="/admin" className="font-semibold text-ink hover:text-accent">
+                Адмін
+              </Link>
+            ) : null}
             <form action={signOutAction}>
               <Button type="submit" variant="ghost" size="sm">
                 Вийти

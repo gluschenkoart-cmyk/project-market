@@ -101,6 +101,11 @@ function buildWhereConditions(filters: ProjectFilters): Prisma.Sql[] {
   const conditions: Prisma.Sql[] = [
     // MVP: єдина активна вертикаль (CLAUDE.md, "Одна вертикаль спочатку").
     Prisma.sql`p."vertical" = 'ARCHITECTURE'::"Vertical"`,
+    // Приховані модератором проєкти (Етап 7) не мають з'являтись у
+    // публічній стрічці нікому, включно з автором — свої приховані
+    // проєкти автор бачить окремо, на власній сторінці проєкту
+    // (src/app/projects/[id]/page.tsx) і в "Мої проєкти" (src/app/profile).
+    Prisma.sql`p."isHidden" = false`,
   ];
 
   if (filters.status.length > 0) {

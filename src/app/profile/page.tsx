@@ -6,14 +6,10 @@ import { isProfileComplete } from "@/lib/onboarding";
 import { PROJECT_STATUS_TO_BADGE } from "@/lib/project-status";
 import { VERTICAL_LABELS } from "@/lib/validation/onboarding";
 import { formatTelegramContact, formatWhatsappContact } from "@/lib/contacts";
+import { ROLE_LABELS } from "@/lib/user-role";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
 import { signOutAction } from "./actions";
-
-const ROLE_LABELS = {
-  CREATOR: "Творець",
-  RECEIVER: "Отримувач",
-} as const;
 
 /**
  * Захищена сторінка (див. src/middleware.ts) — сюди не дійти без входу.
@@ -44,7 +40,7 @@ export default async function ProfilePage() {
       whatsapp: true,
       _count: { select: { projects: true, favorites: true } },
       projects: {
-        select: { id: true, title: true, status: true },
+        select: { id: true, title: true, status: true, isHidden: true },
         orderBy: { createdAt: "desc" },
       },
     },
@@ -179,7 +175,14 @@ export default async function ProfilePage() {
                     href={`/projects/${project.id}`}
                     className="flex items-center justify-between gap-3 rounded-xl border-[3px] border-ink bg-paper px-4 py-3 hover:bg-ink/5"
                   >
-                    <span className="font-semibold text-ink">{project.title}</span>
+                    <span className="flex items-center gap-2 font-semibold text-ink">
+                      {project.title}
+                      {project.isHidden ? (
+                        <span className="rounded-full border-[2px] border-ink bg-accent-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink">
+                          Приховано
+                        </span>
+                      ) : null}
+                    </span>
                     <StatusBadge status={PROJECT_STATUS_TO_BADGE[project.status]} />
                   </Link>
                 </li>
