@@ -84,4 +84,10 @@ export async function registerAction(
     }
     throw error;
   }
+
+  // TypeScript не знає, що успішний signIn() із redirectTo завжди кидає
+  // внутрішній NEXT_REDIRECT (перехоплюється в catch вище) — цей рядок
+  // ніколи не виконається насправді, але потрібен явний return на кожному
+  // шляху функції (виявлено при першій реальній збірці проєкту на Vercel).
+  return { fieldErrors: {} };
 }
