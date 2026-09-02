@@ -14,7 +14,9 @@ export type ProjectStatus =
   | "built"
   | "archived";
 
-const STATUS_LABELS: Record<ProjectStatus, string> = {
+/** Експортовано — Етап 5 (src/lib/project-status.ts) переказує ці ж підписи
+ * для фільтра "Статус проєкту", щоб не тримати переклад у двох місцях. */
+export const STATUS_LABELS: Record<ProjectStatus, string> = {
   academic: "Навчальний",
   concept: "Концепт",
   for_sale: "На продаж",

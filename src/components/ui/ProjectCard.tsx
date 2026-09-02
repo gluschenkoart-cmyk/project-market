@@ -1,13 +1,18 @@
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { PriceBadge, StatusBadge, type ProjectStatus } from "@/components/ui/Badge";
 
 /**
- * Спрощена картка проєкту для вертикалі "Архітектура" — демонструє
- * ключові поля Project DNA (тип, площа, поверховість) у стрічці.
- * Це вітрина дизайн-системи, не фінальний компонент даних (той з'явиться
- * на Етапі 4 разом зі схемою бази даних).
+ * Картка проєкту для вертикалі "Архітектура" — демонструє ключові поля
+ * Project DNA (тип, площа, поверховість) у стрічці (Етап 5) і на вітрині
+ * дизайн-системи (/style-guide, Етап 1 — там `id`/`previewUrl` не
+ * передають, картка просто не стає посиланням і показує заглушку фото,
+ * як і раніше).
  */
 export interface ProjectCardProps {
+  /** Якщо задано — уся картка стає посиланням на /projects/[id] (стрічка,
+   * Етап 5). Без нього — статична демонстрація (/style-guide). */
+  id?: string;
   title: string;
   authorName: string;
   university: string;
@@ -16,10 +21,14 @@ export interface ProjectCardProps {
   floors: number;
   status: ProjectStatus;
   priceUah?: number;
+  /** Перше зображення проєкту (перевага — рендерам, див.
+   * src/lib/projects/feed.ts). null/undefined — показуємо заглушку. */
+  previewUrl?: string | null;
   className?: string;
 }
 
 export function ProjectCard({
+  id,
   title,
   authorName,
   university,
@@ -28,17 +37,34 @@ export function ProjectCard({
   floors,
   status,
   priceUah,
+  previewUrl,
   className,
 }: ProjectCardProps) {
-  return (
+  const card = (
     <article
       className={cn(
         "overflow-hidden rounded-2xl border-[3px] border-ink bg-paper shadow-[6px_6px_0_0_var(--color-ink)]",
+        id && "transition-transform duration-150 ease-out hover:-translate-y-0.5",
         className,
       )}
     >
-      <div className="flex aspect-[4/3] items-center justify-center border-b-[3px] border-ink bg-ink/5 font-heading text-sm text-ink/40">
-        Рендер / фото проєкту
+      <div className="aspect-[4/3] overflow-hidden border-b-[3px] border-ink bg-ink/5">
+        {previewUrl ? (
+          // Файли зараз віддаються з локального сховища (src/lib/storage.ts),
+          // домен наперед невідомий next/image — звичайний <img> навмисно
+          // (той самий підхід, що й на src/app/projects/[id]/page.tsx).
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt={title}
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center font-heading text-sm text-ink/40">
+            Рендер / фото проєкту
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-3 p-4">
@@ -71,5 +97,18 @@ export function ProjectCard({
         </div>
       </div>
     </article>
+  );
+
+  if (!id) {
+    return card;
+  }
+
+  return (
+    <Link
+      href={`/projects/${id}`}
+      className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+    >
+      {card}
+    </Link>
   );
 }

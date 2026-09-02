@@ -55,6 +55,61 @@ async function main() {
     },
   });
 
+  // Ще два проєкти — щоб стрічку й фільтри (Етап 5) було на чому
+  // перевірити: різні типи об'єкта, стилі, статуси й ціни (зокрема один
+  // без ціни — "лише портфоліо").
+  const publicSpaceDna: ArchitectureDna = {
+    typology: "PUBLIC",
+    style: "HIGH_TECH",
+    subtype: "Міський культурний центр",
+    totalAreaSqm: 3200,
+    floors: 4,
+    year: 2025,
+    academicType: "CONCEPT",
+    software: ["Rhino", "Lumion"],
+  };
+
+  await prisma.project.upsert({
+    where: { id: "seed-maria-project-2" },
+    update: {},
+    create: {
+      id: "seed-maria-project-2",
+      authorId: maria.id,
+      vertical: "ARCHITECTURE",
+      title: "Культурний центр біля набережної",
+      description: "Концепт багатофункціонального культурного центру.",
+      status: "CONCEPT",
+      // Без ціни — свідомо: демонструє картку "лише портфоліо".
+      dna: publicSpaceDna as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  const commercialDna: ArchitectureDna = {
+    typology: "COMMERCIAL",
+    style: "ART_DECO",
+    subtype: "Торговельно-офісний центр",
+    totalAreaSqm: 12500,
+    floors: 6,
+    year: 2024,
+    academicType: "COURSEWORK",
+    software: ["ArchiCAD"],
+  };
+
+  await prisma.project.upsert({
+    where: { id: "seed-maria-project-3" },
+    update: {},
+    create: {
+      id: "seed-maria-project-3",
+      authorId: maria.id,
+      vertical: "ARCHITECTURE",
+      title: "Торговельно-офісний центр у стилі ар-деко",
+      description: "Курсовий проєкт комерційної нерухомості.",
+      status: "FOR_SALE",
+      priceUah: 120000,
+      dna: commercialDna as unknown as Prisma.InputJsonValue,
+    },
+  });
+
   // Приклад ролі RECEIVER (покупець) — персона Марека з
   // PersonyTaShlyahKorystuvacha.md, "Покупець 1 з 2".
   await prisma.user.upsert({
@@ -70,7 +125,7 @@ async function main() {
     },
   });
 
-  console.log("Seed завершено: 2 користувачі (CREATOR, RECEIVER), 1 проєкт.");
+  console.log("Seed завершено: 2 користувачі (CREATOR, RECEIVER), 3 проєкти.");
 }
 
 main()
